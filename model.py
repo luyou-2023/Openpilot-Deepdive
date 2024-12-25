@@ -69,7 +69,8 @@ class SequencePlanningNetwork(nn.Module):
         )
 
         # GRU 层，用于处理时间序列数据。GRU（门控循环单元）用于捕捉时序信息
-        self.gru = nn.GRU(input_size=1024, hidden_size=512, bidirectional=True, batch_first=True)  # bidirectional=True 表示双向 GRU
+        self.gru = nn.GRU(input_size=1024, hidden_size=512, bidirectional=True,
+                          batch_first=True)  # bidirectional=True 表示双向 GRU
 
         # 计划头部的后续部分（plan_head_tip），用于生成最终的轨迹预测
         self.plan_head_tip = nn.Sequential(
@@ -93,7 +94,8 @@ class SequencePlanningNetwork(nn.Module):
 
         # 预测结果分为两个部分：预测类别（cls）和预测轨迹
         pred_cls = raw_preds[:, :self.M]  # 类别预测，大小为 M
-        pred_trajectory = raw_preds[:, self.M:].reshape(-1, self.M, self.num_pts, 3)  # 轨迹预测，形状为 [batch_size, M, num_pts, 3]
+        pred_trajectory = raw_preds[:, self.M:].reshape(-1, self.M, self.num_pts,
+                                                        3)  # 轨迹预测，形状为 [batch_size, M, num_pts, 3]
 
         # 将三维坐标的每一维进行变换
         pred_xs = pred_trajectory[:, :, :, 0:1].exp()  # 对 x 坐标进行指数变换
@@ -163,8 +165,8 @@ class MultipleTrajectoryPredictionLoss(nn.Module):
         with torch.no_grad():
             # 第一步：计算预测轨迹和真实轨迹之间的距离
             # 选择每条轨迹的最后一个点作为轨迹的结束位置
-            pred_end_positions = pred_trajectory[:, :, self.num_pts-1, :]  # [B, M, 3]
-            gt_end_positions = gt[:, self.num_pts-1:, :].expand(-1, self.M, -1)  # [B, 1, 3] -> [B, M, 3]
+            pred_end_positions = pred_trajectory[:, :, self.num_pts - 1, :]  # [B, M, 3]
+            gt_end_positions = gt[:, self.num_pts - 1:, :].expand(-1, self.M, -1)  # [B, 1, 3] -> [B, M, 3]
 
             # 计算结束点之间的余弦相似度，距离越小，两个向量越相似
             distances = 1 - self.distance_func(pred_end_positions, gt_end_positions)  # [B, M]
@@ -174,7 +176,8 @@ class MultipleTrajectoryPredictionLoss(nn.Module):
 
         # 根据最小距离的索引选择最接近的预测轨迹
         gt_cls = index
-        pred_trajectory = pred_trajectory[torch.tensor(range(len(gt_cls)), device=gt_cls.device), index, ...]  # [B, num_pts, 3]
+        pred_trajectory = pred_trajectory[
+            torch.tensor(range(len(gt_cls)), device=gt_cls.device), index, ...]  # [B, num_pts, 3]
 
         # 计算分类损失：预测类别与真实类别之间的损失
         cls_loss = self.cls_loss(pred_cls, gt_cls)
@@ -183,7 +186,6 @@ class MultipleTrajectoryPredictionLoss(nn.Module):
         reg_loss = self.reg_loss(pred_trajectory, gt).mean(dim=(0, 1))  # 对每个样本的损失取平均
 
         return cls_loss, reg_loss
-
 
 
 if __name__ == '__main__':
@@ -196,7 +198,7 @@ if __name__ == '__main__':
     features = model(dummy_input)
 
     pred_cls = torch.rand(16, 5)
-    pred_trajectory = torch.rand(16, 5*20*3)
+    pred_trajectory = torch.rand(16, 5 * 20 * 3)
     gt = torch.rand(16, 20, 3)
 
     loss = MultipleTrajectoryPredictionLoss(1.0, 5, 20)
