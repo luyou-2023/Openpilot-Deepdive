@@ -39,3 +39,114 @@ Driver Monitoring 模型专注于监测驾驶员的状态和行为，特别是�
 注意力分散警告：如果驾驶员视线偏离前方道路太久（如看手机、外界环境等），则触发警告。
 驾驶员状态评分：综合评估驾驶员的警觉性和集中度，给出评分或警告等级。
 这些模型通过深度学习算法对车辆的周围环境、驾驶员行为及车辆自身状态进行智能处理，帮助提升驾驶安全性和自动化水平。
+
+
+supercombo模型输出
+struct ModelOutput {
+  const ModelOutputPlans plans;                                    #size: 4955
+  const ModelOutputLaneLines lane_lines;                           #size: 528 + 8
+  const ModelOutputRoadEdges road_edges;                           #size: 264
+  const ModelOutputLeads leads;                                    #size: 102 + 3
+  const ModelOutputMeta meta;                                      #size: 8 + 48 + 32
+  const ModelOutputPose pose;                                      #size: 12
+  const ModelOutputWideFromDeviceEuler wide_from_device_euler;     #size: 6
+  const ModelOutputTemporalPose temporal_pose;                     #size: 12
+
+  ##下面这是struct中未定义的，但实际有的
+  const float feature[128];                                        #size: 128
+};
+
+
+ModelOutputPlans的定义如下：
+const int TRAJECTORY_SIZE = 33;
+constexpr int PLAN_MHP_N = 5;
+
+struct ModelOutputXYZ {
+  float x;
+  float y;
+  float z;
+};
+#size: 3
+
+struct ModelOutputPlanElement {
+  ModelOutputXYZ position;
+  ModelOutputXYZ velocity;
+  ModelOutputXYZ acceleration;
+  ModelOutputXYZ rotation;
+  ModelOutputXYZ rotation_rate;
+};
+#size: 15
+
+struct ModelOutputPlanPrediction {
+  std::array<ModelOutputPlanElement, TRAJECTORY_SIZE> mean;
+  std::array<ModelOutputPlanElement, TRAJECTORY_SIZE> std;
+  float prob;
+};
+#size: 15*33 + 15*33 + 1 = 991
+
+struct ModelOutputPlans {
+  std::array<ModelOutputPlanPrediction, PLAN_MHP_N> prediction;
+}
+#size: 991 * 5 = 4955
+
+在 SuperCombo 模型的输出中，ModelOutput 是主要的输出结构，它包含了多个子结构，每个子结构都代表了模型在不同方面的预测结果。让我们逐一分析这些子结构以及它们的参数。
+
+1. ModelOutputPlans
+这个结构包含了多个计划预测，每个计划代表模型对不同轨迹的预测。ModelOutputPlans 的大小是 4955，它由多个 ModelOutputPlanPrediction 组成，每个 ModelOutputPlanPrediction 进一步包含了多个轨迹点的预测。
+
+相关结构：
+ModelOutputPlanElement
+每个轨迹点由以下数据组成：
+
+position: 坐标位置（x, y, z）
+velocity: 速度（x, y, z）
+acceleration: 加速度（x, y, z）
+rotation: 旋转（x, y, z）
+rotation_rate: 旋转速率（x, y, z）
+每个 ModelOutputPlanElement 的大小是 15。
+
+ModelOutputPlanPrediction
+每个计划预测包含了 TRAJECTORY_SIZE 个轨迹点的预测结果（在代码中为 33 个点）。这些点分别有 mean（均值）和 std（标准差）两组数据。
+
+mean 和 std 都是一个大小为 15 的 ModelOutputPlanElement 数组，共 33 个元素。
+prob: 预测的概率（float 类型）。
+ModelOutputPlanPrediction 的总大小是 991（33个轨迹点 × 15 + 33个轨迹点 × 15 + 1个概率）。
+
+ModelOutputPlans
+这个结构包含了 PLAN_MHP_N（5）的 ModelOutputPlanPrediction 元素，表示模型对 5 条不同计划轨迹的预测。
+
+总大小是 4955（991 × 5）。
+2. ModelOutputLaneLines
+这个结构包含了与车道线相关的预测数据。它的大小是 528 + 8。
+
+车道线通常是基于图像处理和环境感知进行预测的，可能包含多个车道线的位置、曲率和其他属性。
+3. ModelOutputRoadEdges
+这个结构包含了与道路边缘相关的数据，大小为 264。
+
+通常用于表示道路的边缘位置和形态，帮助车辆识别道路的边界。
+4. ModelOutputLeads
+这个结构包含了与前方车辆（或障碍物）相关的信息，大小为 102 + 3。
+
+包括前方车辆的位置、速度、加速度、角度等信息。
+5. ModelOutputMeta
+这个结构包含了模型的元数据，大小为 8 + 48 + 32。
+
+可能包括一些模型的配置信息、时间戳、或其他辅助数据。
+6. ModelOutputPose
+这个结构包含了与车辆姿态相关的数据，大小为 12。
+
+可能表示车辆的位置信息、旋转信息等（如车身姿态、方向等）。
+7. ModelOutputWideFromDeviceEuler
+这个结构包含了从设备传感器（如IMU或其他设备）获得的欧拉角信息，大小为 6。
+
+用于表示传感器的方向和旋转（通常是姿态数据）。
+8. ModelOutputTemporalPose
+这个结构包含了与时间相关的姿态数据，大小为 12。
+
+可能表示随时间变化的姿态数据，用于分析动态变化的运动状态。
+9. feature
+这是一个大小为 128 的浮动数组，包含了模型提取的特征数据。
+
+这些特征可能是从图像数据、传感器数据、或其他输入中提取的，用于进一步的决策或行为预测。
+总结：
+ModelOutput 是一个包含多个重要预测和状态信息的结构，用于描述 SuperCombo 模型的输出结果。各个子结构代表了不同方面的预测，如轨迹规划、车道线、道路边缘、前方车辆信息等，同时还包括一些辅助的元数据和特征数据。通过这些输出，模型可以根据环境数据作出决策并提供控制指令。
