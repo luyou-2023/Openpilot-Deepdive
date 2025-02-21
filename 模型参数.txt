@@ -676,3 +676,167 @@ ModelOutputPose 和 ModelOutputTemporalPose：12（由 4 个 ModelOutputXYZ 组�
 
 
 
+Nav 模型输入与输出解析
+Nav 模型主要用于从导航产生的图像中提取特征，这些特征随后被传递给 SuperCombo 模型进行进一步处理。
+
+输入：
+图像：Nav 模型的输入是导航系统生成的图像。这些图像可能包含车辆周围环境的视觉信息，例如路面、交通标志、其他车辆等。
+输出：
+nav_features：Nav 模型的输出是一个特征向量，形状为 1x64，即输出是一个 64 维的向量。这个向量包含从输入图像中提取的特征信息，用于传递给 SuperCombo 模型。
+详细说明：
+输入图像：通常，导航系统会使用车载相机或其他传感器来捕获周围环境的图像，这些图像会包含道路信息、障碍物、交通标志、车道线等。Nav 模型会处理这些图像并提取出有助于后续决策和预测的特征。
+
+nav_features 输出：nav_features 是 Nav 模型生成的特征向量，形状为 1x64，表示从图像中提取的 64 维特征。这些特征可以是图像的高层次信息，如场景的整体布局、道路的形态、可识别的标志或其他动态元素等。这个输出向量将作为输入，传递给 SuperCombo 模型，用于进一步的分析和预测。
+
+如何使用 nav_features：
+nav_features 会作为 SuperCombo 模型的输入之一，帮助 SuperCombo 更好地理解当前的车辆环境，并作出准确的预测。这些特征可以帮助 SuperCombo 预测与车辆运动、交通情况、碰撞预警等相关的信息。
+
+总结：
+输入：Nav 模型的输入是导航图像，可能来自车载相机或其他传感器。
+输出：Nav 模型输出的是一个 64 维的特征向量 nav_features，用于给 SuperCombo 模型提供进一步分析的基础。
+通过这种方式，Nav 模型帮助从图像中提取出关键特征，辅助 SuperCombo 进行更精确的车辆控制和决策。
+
+constexpr int NAV_FEATURE_LEN = 64;
+
+struct NavModelOutputFeatures {
+  std::array<float, NAV_FEATURE_LEN> values;
+};
+
+struct NavModelResult {
+  const NavModelOutputPlan plan;                      #目前是空值，无用
+  const NavModelOutputDesirePrediction desire_pred;   #目前是空值，无用
+  const NavModelOutputFeatures features;              #有用
+  float dsp_execution_time;
+};
+
+
+NavModelResult 结构体解析
+NavModelResult 是 Nav 模型的输出结构体，包含多个字段，其中 features 是实际有用的部分，表示模型从输入的导航图像中提取的特征信息。下面是对各个字段的详细解析：
+
+结构定义：
+cpp
+复制
+编辑
+constexpr int NAV_FEATURE_LEN = 64;
+
+struct NavModelOutputFeatures {
+  std::array<float, NAV_FEATURE_LEN> values;  // 长度为 64 的特征向量
+};
+
+struct NavModelResult {
+  const NavModelOutputPlan plan;               // 目前为空，无用
+  const NavModelOutputDesirePrediction desire_pred;  // 目前为空，无用
+  const NavModelOutputFeatures features;       // 实际有用，64 维的特征向量
+  float dsp_execution_time;                    // 执行时间（单位：秒）
+};
+字段解析：
+NavModelOutputFeatures features：
+
+类型：NavModelOutputFeatures
+描述：该字段包含一个长度为 64 的特征向量 (std::array<float, NAV_FEATURE_LEN>)，由 Nav 模型从导航图像中提取出来的特征。这个特征向量包含了有关当前图像（例如，路面状况、交通标志、车道线、周围物体等）的关键信息，供后续的 SuperCombo 模型使用。
+NavModelOutputPlan plan：
+
+类型：NavModelOutputPlan
+描述：这个字段目前是空值，并没有实际的用途。通常，这种字段可能是为将来扩展而预留的，用于存储与导航相关的计划信息。
+NavModelOutputDesirePrediction desire_pred：
+
+类型：NavModelOutputDesirePrediction
+描述：该字段目前也为空，没有实际用途。一般来说，这个字段可能会用于存储与驾驶意图（例如：车辆的转向、加速等）相关的预测结果。
+float dsp_execution_time：
+
+类型：float
+描述：这个字段记录了模型执行的时间，单位通常为秒。这有助于分析模型的性能，了解在给定的计算资源下，生成特征的时间消耗。
+总结：
+features 是 NavModelResult 中唯一有用的字段，包含了长度为 64 的特征向量，代表从导航图像中提取的重要特征。
+plan 和 desire_pred 当前为空，暂时无用，可能是为将来的扩展预留的字段。
+dsp_execution_time 用于记录模型推理的执行时间。
+通过这个结构体，Nav 模型能够输出图像特征、执行时间等信息，供后续的模型（如 SuperCombo）进一步使用。
+
+Driver Monitoring 模型
+该模型使用comma设备的前置广角摄像头，判断拍摄驾驶员状态，防止他没有将注意力放在前方道路上。若判定驾驶员注意力问题则会警示或退出辅助驾驶状态。
+
+数据输入格式：
+
+single image (640 * 320 * 3 in RGB):
+full input size is 6 * 640/2 * 320/2 = 307200
+represented in YUV420 with 6 channels:
+Channels 0,1,2,3 represent the full-res Y channel and are represented in numpy as Y[::2, ::2], Y[::2, 1::2], Y[1::2, ::2], and Y[1::2, 1::2]
+Channel 4 represents the half-res U channel
+Channel 5 represents the half-res V channel
+normalized, ranging from -1.0 to 1.0
+数据输出格式：
+
+39 x float32 outputs
+face pose: 12 = 6 + 6
+face orientation [pitch, yaw, roll] in camera frame: 3
+face position [dx, dy] relative to image center: 2
+normalized face size: 1
+standard deviations for above outputs: 6
+face visible probability: 1
+eyes: 20 = (8 + 1) + (8 + 1) + 1 + 1
+eye position and size, and their standard deviations: 8
+eye visible probability: 1
+eye closed probability: 1
+wearing sunglasses probability: 1
+poor camera vision probability: 1
+face partially out-of-frame probability: 1
+(deprecated) distracted probabilities: 2
+face covered probability: 1
+
+
+Driver Monitoring 模型输出格式解析
+Driver Monitoring 模型用于从前置广角摄像头图像中判断驾驶员的状态，主要目的是确保驾驶员的注意力集中在道路上。该模型分析图像后输出一系列的指标，帮助判断驾驶员的状态是否符合驾驶安全要求。
+
+输入数据格式：
+输入数据是由摄像头捕获的图像，大小为 640x320，RGB 格式的三通道图像（每个像素有红、绿、蓝三个通道），总像素数量为：
+
+输入图像尺寸：640 * 320 * 3 = 614,400 字节
+输入格式：YUV420 编码，6 个通道：
+通道 0, 1, 2, 3：表示全分辨率的 Y 通道（Y[::2, ::2]、Y[::2, 1::2]、Y[1::2, ::2] 和 Y[1::2, 1::2]），每个通道的尺寸为 640x320 的 1/2 解析度。
+通道 4：半分辨率的 U 通道
+通道 5：半分辨率的 V 通道
+归一化范围：输入值在 -1.0 到 1.0 之间
+输出数据格式：
+输出数据包含多个浮点值，表示不同的驾驶员状态预测。以下是各个输出字段的具体含义和维度：
+
+Face Pose（12 个浮点值）：
+
+6 个浮点值：面部位置和大小相关的标准偏差。
+6 个浮点值：面部姿态（包括 pitch、yaw、roll）相关的标准偏差。
+Face Orientation（3 个浮点值）：
+
+面部在相机坐标系中的姿态（pitch、yaw、roll）。
+Face Position（2 个浮点值）：
+
+面部相对图像中心的位置（dx, dy）。
+Normalized Face Size（1 个浮点值）：
+
+归一化的面部大小。
+Standard Deviations for Above Outputs（6 个浮点值）：
+
+上述面部姿态、位置和大小输出的标准偏差。
+Face Visible Probability（1 个浮点值）：
+
+面部是否可见的概率。
+Eyes（20 个浮点值）：
+
+眼睛位置和大小：
+8 个浮点值：每只眼睛的眼睛位置和大小（左右眼各 8 个值）。
+2 个浮点值：每只眼睛的标准偏差。
+眼睛是否可见的概率（1 个浮点值）
+眼睛闭合的概率（1 个浮点值）
+Additional Information（5 个浮点值）：
+
+佩戴太阳镜的概率（1 个浮点值）
+摄像头视野不清的概率（1 个浮点值）
+面部部分离开框架的概率（1 个浮点值）
+Deprecated Distracted Probabilities（2 个浮点值）：
+
+已废弃的分心驾驶概率值，过去用于表示驾驶员是否分心，但此部分数据已经不再使用。
+Face Covered Probability（1 个浮点值）：
+
+面部是否被遮挡的概率。
+总结：
+该模型的输出主要涉及面部及眼睛的各种状态信息，包括姿态（pitch, yaw, roll）、位置（dx, dy）、大小（normalized size）、可见性、眼睛状态等。通过这些信息，系统可以检测到驾驶员是否注意力集中，例如，是否闭眼、是否佩戴太阳镜、是否面部被遮挡等。
+
+此外，面部遮挡、视野不清等信息也可以用来判断摄像头是否处于异常状态，从而进一步提升驾驶辅助系统的安全性。
