@@ -221,4 +221,44 @@ Trajectory 点数量	控制 step 数
 10Hz：每个 step ≈ 100ms
 
 50Hz：每个 step ≈ 20ms（更细粒度控制）
+
+FSD（Tesla）中每秒多少个 step？
+Tesla 的 FSD 中没有完全开源的代码，但根据多个公开文献、论文与 Dojo 相关介绍，FSD 的 trajectory 是预测未来 6 秒，每秒 20Hz（即每秒 20 个点）：
+
+预测时间长度：6 秒
+
+控制频率：20 Hz（50ms 一个控制）
+
+step 数量：6s × 20Hz = 120 steps
+
+这 120 个 trajectory points 是由神经网络输出，用于控制 module 下发控制命令（steering, acceleration, braking）。
+
+✅ openpilot 中的 step 说明
+openpilot 是 Comma.ai 的开源自动驾驶系统，它的行为预测（modeld）和控制模块（controlsd）有开源代码。
+
+trajectory 时间范围：最多预测 2.5 秒
+
+step 时间间隔：0.05 秒（即 20Hz）
+
+所以：
+
+arduino
+复制
+编辑
+2.5 秒 ÷ 0.05 秒 = 50 个 step
+openpilot 的模型会输出：
+
+python
+复制
+编辑
+model_outputs['plan']['positions']
+model_outputs['plan']['velocities']
+model_outputs['plan']['acceleration']
+通常每个都包含 33 ~ 50 个 step（点），实际数量取决于版本和配置。
+
+✅ 汇总对比
+系统	预测时长	频率	step 数
+Tesla FSD	~6秒	20Hz	~120
+openpilot	2.5秒	20Hz	50
+你目前 demo	不确定（例子是 3）	不确定	3
 '''
